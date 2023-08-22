@@ -11,7 +11,7 @@ RANK_CUTOFF = 8_000
 # RANK_CUTOFF = 100
 # RANK_CUTOFF = 15
 TOTAL = RANK_CUTOFF ** 6
-NUM_THREADS = 500
+NUM_THREADS = 100
 SUCC_CUTOFF = 8
 
 print(f"WORDSET SIZE: {RANK_CUTOFF}")
@@ -71,16 +71,18 @@ def producer():
     global total_iters
 
     for aStart in starts:
-        for a in starts[aStart]:
-            aMid = a[2]
-            aEnd = a[4]
-            for x in starts.get(aStart, []):
-                for y in starts.get(aMid, []):
-                    for z in starts.get(aEnd, []):
-                        q.put((a, x, y, z))
-                        with total_lock:
-                            total_iters += 1
-    print(f"PRODUCER FINISHED WITH {total_iters:,}")
+        for aMid in mids:
+            for aEnd in ends:
+                for bStart in starts:
+                    for bMid in mids:
+                        for bEnd in ends:
+                            for cStart in starts:
+                                for cMid in mids:
+                                    for cEnd in ends:
+                                        item = (aStart, aMid, aEnd, bStart, bMid, bEnd, cStart, cMid, cEnd) 
+                                        q.put(item)
+                                        with total_lock:
+                                            total_iters += 1
 
 
 def worker():
@@ -88,27 +90,33 @@ def worker():
     while True:
         try:
             item = q.get(timeout=1)
-            a, x, y, z = item
+            (aStart, aMid, aEnd, bStart, bMid, bEnd, cStart, cMid, cEnd) = item
         except queue.Empty:
             break
         else:
-            xMid = x[2]
-            yMid = y[2]
-            zMid = z[2]
-            xEnd = x[4]
-            yEnd = y[4]
-            zEnd = z[4]
-
-            bCands = set(starts.get(xMid, [])).intersection(mids.get(yMid, [])).intersection(ends.get(zMid, []))
+            aCands = set(starts.get(aStart, [])).intersection(set(mids.get(aMid, []))).intersection(set(ends.get(aEnd, [])))
+            if len(aCands) == 0:
+                continue
+            bCands = set(starts.get(bStart, [])).intersection(set(mids.get(bMid, []))).intersection(set(ends.get(bEnd, [])))
             if len(bCands) == 0:
                 continue
-            cCands = set(starts.get(xEnd, [])).intersection(set(mids.get(yEnd, []))).intersection(set(ends.get(zEnd, [])))
+            cCands = set(starts.get(cStart, [])).intersection(set(mids.get(cMid, []))).intersection(set(ends.get(cEnd, [])))
             if len(cCands) == 0:
                 continue
+            xCands = set(starts.get(aStart, [])).intersection(set(mids.get(bStart, []))).intersection(set(ends.get(cStart, [])))
+            if len(xCands) == 0:
+                continue
+            yCands = set(starts.get(aMid, [])).intersection(set(mids.get(bMid, []))).intersection(set(ends.get(cMid, [])))
+            if len(yCands) == 0:
+                continue
+            zCands = set(starts.get(aEnd, [])).intersection(set(mids.get(bEnd, []))).intersection(set(ends.get(cEnd)))
+            if len(zCands) == 0:
+                continue
 
+            prod = len(aCands) * len(bCands) * len(cCands) * len(xCands) * len(yCands) * len(zCands)
             with counter_lock:
-                inc = len(bCands) * len(cCands)
-                counter += inc
+                counter += prod
+
 
 
 # Start threads
@@ -150,7 +158,8 @@ while True:
     print(f"T before: {tbefore:,}")
     print(f"T after : {tafter:,}")
     print(f"Pairs generated: {(tafter - tbefore):,}")
-    print(f"Found per sec: {(cafter - cbefore):,}\n")
+    print(f"Found per sec: {(cafter - cbefore):,}")
+    print(f"Full runtime: {time.time() - start:.2f}\n")
 
 
 # Closing
